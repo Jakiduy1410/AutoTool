@@ -1,11 +1,8 @@
 {
+  "env": "pc",
   "package_prefix": "zam",
   "interval": 8,
-  "packages": {
-    "com.zamdepzai.clienv": {},
-    "com.zamdepzai.clienw": {},
-    "com.zamdepzai.clienx": {}
-  },
+  "packages": {},
   "game_ids": {
     "1537690962": "roblox://placeID=1537690962",
     "com.zamdepzai.clienv": "roblox://placeID=1537690962",

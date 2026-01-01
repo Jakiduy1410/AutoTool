@@ -1,41 +1,76 @@
 import curses
 import threading
 import time
+import json
+import platform
 
 from core.packages import get_packages_by_prefix
 from core.auto_rejoin import auto_rejoin_loop
+
+
+# ===== LOAD CONFIG =====
+with open("config/config.json", "r", encoding="utf-8") as f:
+    config = json.load(f)
+
+ENV = config.get("env", "android")  # "pc" hoặc "android"
 
 auto_running = False
 auto_thread = None
 
 
+def safe(callable_fn):
+    """Run curses function safely (Windows-proof)."""
+    try:
+        callable_fn()
+    except curses.error:
+        pass
+
+
 def main(stdscr):
     global auto_running, auto_thread
 
-    curses.curs_set(0)
+    # ===== BASIC CURSES INIT =====
     curses.noecho()
     curses.cbreak()
+    safe(lambda: stdscr.keypad(True))
+
+    # ===== HIDE CURSOR (ONLY ON NON-WINDOWS + NON-PC MODE) =====
+    if ENV != "pc" and platform.system() != "Windows":
+        safe(lambda: curses.curs_set(0))
 
     h, w = stdscr.getmaxyx()
 
-    # ===== STATIC UI (DRAW ONCE) =====
+    # ===== STATIC UI =====
+    stdscr.clear()
     stdscr.box()
     stdscr.addstr(1, 2, "AUTO TOOL V5 - ZAM STYLE")
     stdscr.hline(2, 1, "-", w - 2)
 
     stdscr.addstr(3, 2, "[1] Start Auto Rejoin")
     stdscr.addstr(4, 2, "[2] Scan Packages")
-    stdscr.addstr(5, 2, "[3] Set GameID (CLI)")
-    stdscr.addstr(6, 2, "[4] Detect UserID (CLI)")
-    stdscr.addstr(7, 2, "[0] Exit")
 
-    stdscr.hline(8, 1, "-", w - 2)
+    if ENV != "pc":
+        stdscr.addstr(5, 2, "[3] Set GameID (CLI)")
+        stdscr.addstr(6, 2, "[4] Detect UserID (CLI)")
+        stdscr.addstr(7, 2, "[5] Other Tools")
+        exit_line = 8
+    else:
+        stdscr.addstr(5, 2, "[3] Set GameID (Android only)")
+        stdscr.addstr(6, 2, "[4] Detect UserID (Android only)")
+        exit_line = 7
+
+    stdscr.addstr(exit_line, 2, "[0] Exit")
+
+    menu_end_line = exit_line + 1
+    stdscr.hline(menu_end_line, 1, "-", w - 2)
+
 
     # ===== LOG WINDOW =====
-    log_h = h - 10
-    logw = curses.newwin(log_h, w - 4, 9, 2)
-    logw.scrollok(True)
-    logw.idlok(True)
+    log_h = max(3, h - 8)
+    logw = curses.newwin(log_h, w - 4, 7, 2)
+
+    safe(lambda: logw.scrollok(True))
+    safe(lambda: logw.idlok(True))
 
     logw.addstr("LOG:\n")
     logw.refresh()
@@ -43,15 +78,12 @@ def main(stdscr):
 
     stdscr.timeout(500)
 
-    # ===== LOGGER FUNCTION =====
-    def logger(msg):
-        try:
-            logw.addstr(msg + "\n")
-            logw.refresh()
-        except curses.error:
-            pass
+    # ===== LOGGER =====
+    def logger(msg: str):
+        safe(lambda: logw.addstr(msg + "\n"))
+        safe(lambda: logw.refresh())
 
-    # ===== AUTO REJOIN THREAD =====
+    # ===== AUTO THREAD =====
     def auto_worker():
         logger("[AUTO] Auto Rejoin started")
         auto_rejoin_loop(logger)
@@ -76,6 +108,7 @@ def main(stdscr):
                 logger(f"  - {p}")
 
         elif key == ord('0'):
+            logger("[UI] Exit")
             break
 
         time.sleep(0.05)
