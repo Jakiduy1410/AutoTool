@@ -2,6 +2,7 @@ import time
 import json
 from core.process import is_running, force_stop, start_app
 from core.gameid import get_game_uri
+from core.state import set_state
 
 CONFIG = "config/config.json"
 
@@ -34,14 +35,24 @@ def auto_rejoin_loop(logger):
                 continue
 
             if not is_running(pkg):
+                set_state(pkg, "DEAD")
+                logger(f"[AUTO] {pkg} is not running")
+
+                set_state(pkg, "RESTARTING")
+                logger(f"[STATE] {get_state()}")
                 logger(f"[AUTO] Launching {pkg}")
+
                 force_stop(pkg)
                 start_app(pkg, uri)
 
+                set_state(pkg, "WAITING")
                 logger(f"[AUTO] Waiting {pkg} to stabilize...")
                 wait_until_stable(pkg)
 
+                set_state(pkg, "COOLDOWN")
                 logger(f"[AUTO] {pkg} stable, cooldown...")
                 time.sleep(LAUNCH_DELAY)
+            else:
+                set_state(pkg, "RUNNING")
 
         time.sleep(cfg["interval"])

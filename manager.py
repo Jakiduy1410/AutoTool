@@ -6,6 +6,7 @@ import platform
 
 from core.packages import get_packages_by_prefix
 from core.auto_rejoin import auto_rejoin_loop
+from core.state import init as init_state   # <-- ADD STATE
 
 
 # ===== LOAD CONFIG =====
@@ -34,7 +35,7 @@ def main(stdscr):
     curses.cbreak()
     safe(lambda: stdscr.keypad(True))
 
-    # ===== HIDE CURSOR (ONLY ON NON-WINDOWS + NON-PC MODE) =====
+    # ===== HIDE CURSOR =====
     if ENV != "pc" and platform.system() != "Windows":
         safe(lambda: curses.curs_set(0))
 
@@ -43,27 +44,24 @@ def main(stdscr):
     # ===== STATIC UI =====
     stdscr.clear()
     stdscr.box()
-    stdscr.addstr(1, 2, "AUTO TOOL V5 - ZAM STYLE")
-    stdscr.hline(2, 1, "-", w - 2)
+    safe(lambda: stdscr.addstr(1, 2, "AUTO TOOL V5 - ZAM STYLE"))
+    safe(lambda: stdscr.hline(2, 1, "-", w - 2))
 
-    stdscr.addstr(3, 2, "[1] Start Auto Rejoin")
-    stdscr.addstr(4, 2, "[2] Scan Packages")
+    safe(lambda: stdscr.addstr(3, 2, "[1] Start Auto Rejoin"))
+    safe(lambda: stdscr.addstr(4, 2, "[2] Scan Packages"))
 
     if ENV != "pc":
-        stdscr.addstr(5, 2, "[3] Set GameID (CLI)")
-        stdscr.addstr(6, 2, "[4] Detect UserID (CLI)")
-        stdscr.addstr(7, 2, "[5] Other Tools")
+        safe(lambda: stdscr.addstr(5, 2, "[3] Set GameID (CLI)"))
+        safe(lambda: stdscr.addstr(6, 2, "[4] Detect UserID (CLI)"))
+        safe(lambda: stdscr.addstr(7, 2, "[5] Other Tools"))
         exit_line = 8
     else:
-        stdscr.addstr(5, 2, "[3] Set GameID (Android only)")
-        stdscr.addstr(6, 2, "[4] Detect UserID (Android only)")
+        safe(lambda: stdscr.addstr(5, 2, "[3] Set GameID (Android only)"))
+        safe(lambda: stdscr.addstr(6, 2, "[4] Detect UserID (Android only)"))
         exit_line = 7
 
-    stdscr.addstr(exit_line, 2, "[0] Exit")
-
-    menu_end_line = exit_line + 1
-    stdscr.hline(menu_end_line, 1, "-", w - 2)
-
+    safe(lambda: stdscr.addstr(exit_line, 2, "[0] Exit"))
+    safe(lambda: stdscr.hline(exit_line + 1, 1, "-", w - 2))
 
     # ===== LOG WINDOW =====
     log_h = max(3, h - 8)
@@ -72,9 +70,9 @@ def main(stdscr):
     safe(lambda: logw.scrollok(True))
     safe(lambda: logw.idlok(True))
 
-    logw.addstr("LOG:\n")
-    logw.refresh()
-    stdscr.refresh()
+    safe(lambda: logw.addstr("LOG:\n"))
+    safe(lambda: logw.refresh())
+    safe(lambda: stdscr.refresh())
 
     stdscr.timeout(500)
 
@@ -94,6 +92,12 @@ def main(stdscr):
 
         if key == ord('1') and not auto_running:
             auto_running = True
+
+            # ===== INIT STATE =====
+            pkgs = list(config.get("packages", {}).keys())
+            init_state(pkgs)
+            logger("[STATE] Init state")
+
             auto_thread = threading.Thread(
                 target=auto_worker,
                 daemon=True
