@@ -113,6 +113,7 @@ def join_game(package: str, join_url: str, fallback_url: str):
     return "OK"
 
 def start_and_join(package: str, grace_sec: int, join_url: str, fallback_url: str):
+    stop_app(package)
     start_app(package)
     time.sleep(max(1, grace_sec))
     join_game(package, join_url, fallback_url)
