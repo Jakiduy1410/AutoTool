@@ -118,11 +118,11 @@ Tool sẽ:
 │          │                              │
 │         NO                              │
 │          │                              │
-│   PID trước đó có không?               │
-│    YES ──► CRASHED ──► Restart + Join  │
-│    NO  ──► CHƯA CHẠY ──► Start + Join  │
+│   PID trước đó có không?                │
+│    YES ──► CRASHED ──► Restart + Join   │
+│    NO  ──► CHƯA CHẠY ──► Start + Join   │
 │                                         │
-│  Sau mỗi action: cooldown 30 giây      │
+│  Sau mỗi action: cooldown 30 giây       │
 └─────────────────────────────────────────┘
 ```
 
@@ -130,8 +130,8 @@ Tool sẽ:
 
 | Trạng thái | Ý nghĩa |
 |------------|---------|
-| `RUNNING` | App đang chạy bình thường |
-| `CRASHED` | App bị crash, đang restart |
+| `RUNNING`  | App đang chạy bình thường |
+| `CRASHED`  | App bị crash, đang restart |
 | `NOT_RUNNING` | App chưa được khởi động |
 | `COOLDOWN` | Đang chờ sau khi restart |
 
