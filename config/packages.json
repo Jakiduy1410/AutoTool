@@ -1,0 +1,7 @@
+{
+  "prefix": "zam",
+  "packages": [
+    "com.zamdepzai.clienv",
+    "com.zamdepzai.clienw"
+  ]
+}
