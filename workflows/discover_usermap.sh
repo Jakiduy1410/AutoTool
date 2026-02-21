@@ -1,87 +1,132 @@
 #!/usr/bin/env bash
-# Chạy một lần để build mapping package → UserId
-# Kết quả lưu vào config/user_map.json
+set -e
 
 BASE="/sdcard/Download/AutoTool"
 CODEX_WS="/storage/emulated/0/Codex/Workspace"
 PKGFILE="$BASE/config/packages.json"
 OUTFILE="$BASE/config/user_map.json"
-GRACE=20  # giây chờ executor inject
+GRACE=25
 
 if [ ! -f "$PKGFILE" ]; then
   echo "❌ Chưa có packages.json — chạy menu [4] trước."
   exit 1
 fi
 
-packs=$(python3 -c "
+# Đọc danh sách packages
+mapfile -t PACKS < <(python3 -c "
 import json
-packs = json.load(open('$PKGFILE'))['packages']
-for p in packs: print(p)
+for p in json.load(open('$PKGFILE'))['packages']:
+    print(p)
 ")
 
 echo "=============================="
 echo "   DISCOVER USERID MAP"
 echo "=============================="
-echo "Sẽ mở từng clone lần lượt, chờ executor inject rồi detect UserId."
-echo "Đảm bảo executor_check.lua đã có trong Autoexec của Codex!"
+echo "Sẽ mở từng clone một, kill hết clone khác trước."
+echo "Đảm bảo executor_check.lua đã có trong Autoexec Codex!"
 echo ""
-read -r -p "Bắt đầu? (Enter để tiếp tục, Ctrl+C để hủy): "
+read -r -p "Bắt đầu? (Enter để tiếp tục): "
 
-# Snapshot file .main hiện có
-existing=$(ls "$CODEX_WS"/*.main 2>/dev/null | xargs -I{} basename {} .main | sort)
-
-declare -A result
-
-for pkg in $packs; do
-  echo ""
-  echo "── Clone: $pkg ──"
-
-  # Dừng app trước
+# Kill tất cả clone trước
+echo ""
+echo "── Kill tất cả clone ──"
+for pkg in "${PACKS[@]}"; do
   su -c "am force-stop $pkg" >/dev/null 2>&1
+  echo "  stopped: $pkg"
+done
+sleep 3
 
-  # Snapshot trước khi mở
-  before=$(ls "$CODEX_WS"/*.main 2>/dev/null | xargs -I{} basename {} .main | sort)
+# Kết quả mapping
+declare -A USERMAP
 
-  # Mở app
+for pkg in "${PACKS[@]}"; do
+  echo ""
+  echo "── Discover: $pkg ──"
+
+  # Kill tất cả clone (phòng có cái nào còn sót)
+  for p in "${PACKS[@]}"; do
+    su -c "am force-stop $p" >/dev/null 2>&1
+  done
+  sleep 2
+
+  # Snapshot file .main TRƯỚC khi mở
+  declare -A before_map
+  for f in "$CODEX_WS"/*.main; do
+    [ -f "$f" ] || continue
+    before_map["$f"]=1
+  done
+
+  # Mở clone
   su -c "monkey -p $pkg -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
-  echo "  → Đã mở, chờ ${GRACE}s cho executor inject..."
-  sleep "$GRACE"
+  echo "  → Đã mở, chờ ${GRACE}s..."
 
-  # Tìm file .main mới nhất (mtime gần nhất)
-  newest=$(ls -t "$CODEX_WS"/*.main 2>/dev/null | head -1)
-  if [ -z "$newest" ]; then
-    echo "  ⚠️  Không tìm thấy .main file — bỏ qua"
-    continue
-  fi
+  # Chờ từng giây, phát hiện file mới ngay khi xuất hiện
+  found_uid=""
+  for i in $(seq 1 $GRACE); do
+    sleep 1
+    for f in "$CODEX_WS"/*.main; do
+      [ -f "$f" ] || continue
+      # File này có trong before không?
+      if [ -z "${before_map[$f]+x}" ]; then
+        # File mới xuất hiện!
+        uid=$(basename "$f" .main)
+        found_uid="$uid"
+        break 2
+      fi
+    done
+  done
 
-  age=$(( $(date +%s) - $(stat -c %Y "$newest") ))
-  user_id=$(basename "$newest" .main)
-
-  if [ "$age" -le $(( GRACE + 5 )) ]; then
-    echo "  ✅ UserId = $user_id (age=${age}s)"
-    result[$pkg]=$user_id
+  if [ -n "$found_uid" ]; then
+    echo "  ✅ UserId = $found_uid"
+    USERMAP[$pkg]=$found_uid
   else
-    echo "  ⚠️  File quá cũ (age=${age}s) — executor có thể chưa inject"
-    echo "  → Gán tạm $user_id, bạn có thể sửa sau trong user_map.json"
-    result[$pkg]=$user_id
+    # Không có file mới → tìm file nào vừa update gần nhất
+    echo "  ⚠️  Không có file mới, tìm file vừa update..."
+    newest=""
+    newest_age=9999
+    for f in "$CODEX_WS"/*.main; do
+      [ -f "$f" ] || continue
+      age=$(( $(date +%s) - $(stat -c %Y "$f") ))
+      if [ "$age" -lt "$newest_age" ]; then
+        newest_age=$age
+        newest="$f"
+      fi
+    done
+
+    if [ -n "$newest" ] && [ "$newest_age" -le $(( GRACE + 5 )) ]; then
+      uid=$(basename "$newest" .main)
+      echo "  ✅ UserId = $uid (fallback, age=${newest_age}s)"
+      USERMAP[$pkg]=$uid
+    else
+      echo "  ❌ Không detect được — executor có thể chưa inject"
+      echo "     Kiểm tra executor_check.lua có trong Autoexec chưa?"
+    fi
   fi
 
-  # Dừng app sau khi discover xong
+  # Kill clone sau khi discover xong
   su -c "am force-stop $pkg" >/dev/null 2>&1
   sleep 3
 done
 
 # Ghi kết quả ra JSON
+echo ""
+echo "── Lưu user_map.json ──"
 python3 - << PY
 import json, os
+
 data = {}
-$(for pkg in "${!result[@]}"; do echo "data['$pkg'] = '${result[$pkg]}'"; done)
+$(for pkg in "${!USERMAP[@]}"; do
+  echo "data['$pkg'] = '${USERMAP[$pkg]}'"
+done)
+
 os.makedirs(os.path.dirname("$OUTFILE"), exist_ok=True)
-json.dump(data, open("$OUTFILE", "w"), indent=2)
-print("✅ Đã lưu user_map.json:")
+with open("$OUTFILE", "w") as f:
+    json.dump(data, f, indent=2)
+
+print(f"✅ Đã lưu {len(data)} mapping:")
 for k, v in data.items():
     print(f"   {k} → {v}")
 PY
 
 echo ""
-echo "✅ Discover xong! Giờ bật watchdog bình thường qua menu [1]."
+echo "✅ Xong! Giờ bật watchdog qua menu [1]."
