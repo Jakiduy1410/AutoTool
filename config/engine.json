@@ -2,6 +2,7 @@
   "interval_sec": 5,
   "cooldown_sec": 30,
   "start_grace_sec": 10,
+  "clone_start_delay_sec": 15,
   "log_file": "/sdcard/Download/AutoTool/logs/watchdog.log",
   "packages_file": "/sdcard/Download/AutoTool/config/packages.json",
   "state_dir": "/sdcard/Download/AutoTool/runtime"
