@@ -250,26 +250,24 @@ def main():
                     st["loading_since"] = 0
                     reason = f"executor_alive age={main_age}s"
 
-                elif user_id:
-                    # PID có nhưng executor chưa inject / đã die
+                else:
+                    # PID có nhưng executor chưa inject / đã die / chưa có user_id
                     if not st.get("loading_since"):
                         st["loading_since"] = ts
                     waited = ts - st["loading_since"]
                     st["status"] = "LOADING"
-                    reason = f"executor_dead waited={waited}s"
+                    if not user_id:
+                        reason = f"pid_ok no_userid waited={waited}s (chạy menu [5])"
+                    else:
+                        reason = f"executor_dead waited={waited}s"
 
+                    # Loading quá 2 phút → rejoin dù có user_id hay không
                     if waited > 120:
-                        # Loading quá 2 phút → rejoin
                         action = "REJOIN"
                         join_game(pkg, join_url, fallback_url)
                         st["cooldown_until"] = ts + cooldown_sec
                         st["last_action"]    = "REJOIN"
                         st["loading_since"]  = ts
-
-                else:
-                    # Chưa có UserId trong map → chỉ theo dõi PID
-                    st["status"] = "RUNNING"
-                    reason = "pid_ok no_userid (chạy discover_usermap.sh)"
 
                 st["last_seen"] = ts
                 st["last_pid"]  = pid
